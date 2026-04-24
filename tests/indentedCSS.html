@@ -5,50 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alternating Indentation</title>
     <style>
-        .indented {
-            margin-left: 20px; /* Indentation for every second line */
+        .alternating-indented {
+            line-height: 1; /* Remove additional line spacing */
+        }
+
+        .alternating-indented div:nth-child(even) {
+            margin-left: 20px; /* Indent even lines */
         }
     </style>
 </head>
 <body>
+    <div class="alternating-indented">
+        <div>first line</div>
+        <div>second line</div>
+        <div>third line</div>
+        <div>fourth line</div>
+    </div>
     <div class="alternating-indented">
         first line
         second line
         third line
         fourth line
     </div>
-
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            // Get the content of the div
-            const div = document.querySelector('.alternating-indented');
-            const text = div.innerHTML.trim();
-
-            // Split the text into lines using regex (preserving multiple spaces and line breaks)
-            const lines = text.split(/[\r\n]+/);
-
-            // Clear the original content
-            div.innerHTML = '';
-
-            // Loop through each line and wrap it with a span
-            lines.forEach((line, index) => {
-                const span = document.createElement('span');
-                span.textContent = line.trim();
-                
-                // Add indentation to every second line
-                if (index % 2 !== 0) {
-                    span.classList.add('indented');
-                }
-
-                // Append the span to the div
-                div.appendChild(span);
-
-                // Add a line break after each line except the last one
-                if (index < lines.length - 1) {
-                    div.appendChild(document.createElement('br'));
-                }
-            });
-        });
-    </script>
 </body>
 </html>

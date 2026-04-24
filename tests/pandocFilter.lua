@@ -1,109 +1,123 @@
--- poetry-filter.lua v0.1.2
+-- poetry-filter.lua v0.2.0
 
-local metadata = {}
 local in_poem = false
-local indent_type = nil
+local indent_alternate = false
 local numbering = false
 local line_count = 0
 
-function parseFrontMatter(meta)
-    metadata = meta
-    indent_type = meta.PForm or ""
-    numbering = meta.PNumbering == "Alternate"
+function Meta(meta)
+    if meta.PIndent then
+        indent_alternate = pandoc.utils.stringify(meta.PIndent) == "Alternate"
+    end
+    if meta.PNumbering then
+        local n = pandoc.utils.stringify(meta.PNumbering):lower()
+        numbering = n ~= "off" and n ~= "" and n ~= "none" and n ~= "false"
+    end
+    return meta
 end
 
-function processDirectives(inlines)
-    local result = {}
-    for _, inline in ipairs(inlines) do
-        if inline.t == "Str" then
-            if inline.text == "@@indent:metre" or inline.text == "@@indent:meter" then
-                indent_type = "metre"
-            elseif inline.text == "@@numbering:on" then
-                numbering = true
-            elseif inline.text == "@@numbering:off" then
-                numbering = false
-            elseif inline.text == "@@poem" then
-                in_poem = true
-            else
-                table.insert(result, inline)
+-- Split a flat list of Inlines into per-line sublists at SoftBreak/LineBreak
+local function split_lines(inlines)
+    local lines = {{}}
+    for _, el in ipairs(inlines) do
+        if el.t == "SoftBreak" or el.t == "LineBreak" then
+            table.insert(lines, {})
+        else
+            table.insert(lines[#lines], el)
+        end
+    end
+    if #lines[#lines] == 0 then table.remove(lines) end
+    return lines
+end
+
+-- Stringify a line's inlines, stripping trailing " # ..." directive comments.
+-- Pandoc parses @@directive as Str("@") + Cite(id="directive"), so Cite
+-- elements are reconstructed as "@id" to restore the original @@ text.
+local function get_text(inlines)
+    local parts = {}
+    for _, el in ipairs(inlines) do
+        if el.t == "Str" then
+            table.insert(parts, el.text)
+        elseif el.t == "Space" then
+            table.insert(parts, " ")
+        elseif el.t == "Cite" then
+            for _, citation in ipairs(el.citations) do
+                table.insert(parts, "@" .. citation.id)
             end
-        else
-            table.insert(result, inline)
         end
     end
-    return result
+    local text = table.concat(parts)
+    local ci = text:find(" #")
+    return ci and text:sub(1, ci - 1) or text
 end
 
-function processAlignment(inlines)
-    if #inlines > 0 and inlines[1].t == "Str" and inlines[1].text:match("^%->") then
-        local align = "right"
-        if inlines[1].text:match("^%-><") then
-            align = "center"
-            inlines[1].text = inlines[1].text:sub(4)
-        else
-            inlines[1].text = inlines[1].text:sub(3)
-        end
-        return pandoc.Div(inlines, pandoc.Attr("", {}, {{"style", "text-align: " .. align .. ";"}}))
+local function process_line(inlines)
+    local text = get_text(inlines)
+
+    -- Directives — consume without output
+    if text == "@@poem" or text == "@@poem:start" then
+        in_poem = true;  return nil
     end
-    return inlines
+    if text == "@@poem:end" then
+        in_poem = false; return nil
+    end
+    if text == "@@indent:metre" or text == "@@indent:meter" then
+        indent_alternate = true; return nil
+    end
+    if text == "@@numbering:on"  then numbering = true;  return nil end
+    if text == "@@numbering:off" then numbering = false; return nil end
+
+    -- Alignment directives
+    if text:match("^%-><") then
+        return pandoc.RawBlock("html",
+            '<div style="text-align: center;">' .. text:sub(4) .. '</div>')
+    end
+    if text:match("^%->") then
+        return pandoc.RawBlock("html",
+            '<div style="text-align: right;">' .. text:sub(3) .. '</div>')
+    end
+
+    -- Manual indentation via leading colons
+    local colons, rest = text:match("^(:+)(.*)")
+    local is_manual_indent = colons ~= nil
+    local result = is_manual_indent
+        and pandoc.List({
+                pandoc.RawInline("html", string.rep("&nbsp;", #colons * 4)),
+                pandoc.Str(rest)
+            })
+        or  pandoc.List(inlines)
+
+    -- Poem mode: alternate indentation and optional line numbering.
+    -- Colon-indented lines have an explicit indent, so skip alternate indent for them.
+    if in_poem then
+        if numbering and not is_manual_indent and line_count % 2 == 0 then
+            result:insert(1, pandoc.Str("(" .. tostring(math.floor(line_count / 2) + 1) .. ") "))
+        end
+        if indent_alternate and not is_manual_indent and line_count % 2 == 1 then
+            result:insert(1, pandoc.RawInline("html", "&nbsp;&nbsp;&nbsp;&nbsp;"))
+        end
+        line_count = line_count + 1
+    end
+
+    return pandoc.Plain(result)
 end
 
-function processIndentation(inlines)
-    if #inlines > 0 and inlines[1].t == "Str" then
-        local indent, rest = inlines[1].text:match("^(:+)(.*)$")
-        if indent then
-            inlines[1].text = rest
-            return {pandoc.RawInline("html", string.rep("&nbsp;", #indent * 4)), table.unpack(inlines)}
+function Para(para)
+    local result = {}
+    for _, line_inlines in ipairs(split_lines(para.content)) do
+        if #line_inlines > 0 then
+            local block = process_line(line_inlines)
+            if block ~= nil then table.insert(result, block) end
         end
     end
-    return inlines
-end
 
-function applyFormatting(para)
-    if not in_poem then return para end
-
-    local lines = pandoc.utils.split_blocks(pandoc.utils.stringify(para))
-    local formatted_lines = {}
-
-    for i, line in ipairs(lines) do
-        local inlines = pandoc.read(line).blocks[1].content
-        inlines = processDirectives(inlines)
-        inlines = processAlignment(inlines)
-        inlines = processIndentation(inlines)
-
-        if numbering and i % 2 == 1 then
-            line_count = line_count + 1
-            table.insert(inlines, 1, pandoc.Str(tostring(math.ceil(i / 2)) .. ". "))
-        end
-
-        if metadata.PIndent == "Alternate" and i % 2 == 0 then
-            table.insert(inlines, 1, pandoc.RawInline("html", "&nbsp;&nbsp;&nbsp;&nbsp;"))
-        end
-
-        table.insert(formatted_lines, inlines)
+    if #result == 0 then return {}
+    elseif #result == 1 then return result[1]
+    else return pandoc.Div(result, pandoc.Attr("", {"poetry"}))
     end
-
-    return pandoc.Div(
-        pandoc.utils.map(formatted_lines, function(line)
-            return pandoc.Plain(line)
-        end),
-        pandoc.Attr("", {"poetry"})
-    )
-end
-
-function Pandoc(doc)
-    parseFrontMatter(doc.meta)
-    local new_blocks = {}
-    for _, block in ipairs(doc.blocks) do
-        if block.t == "Para" then
-            table.insert(new_blocks, applyFormatting(block))
-        else
-            table.insert(new_blocks, block)
-        end
-    end
-    return pandoc.Pandoc(new_blocks, doc.meta)
 end
 
 return {
-    { Pandoc = Pandoc }
+    {Meta = Meta},
+    {Para = Para},
 }
