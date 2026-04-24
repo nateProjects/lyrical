@@ -42,12 +42,12 @@ python poemParser.py <poem_file>
 
 **HTML (pandoc + Lua filter)**
 ```
-pandoc --lua-filter tests/pandocFilter.lua poem.md -o poem.html
+pandoc --lua-filter pandocFilter.lua poem.md -o poem.html
 ```
 
 **PDF (pandoc + Lua filter)**
 ```
-pandoc --lua-filter tests/pandocFilter.lua poem.md -o poem.pdf
+pandoc --lua-filter pandocFilter.lua poem.md -o poem.pdf
 ```
 pandoc selects a LaTeX engine automatically; use `--pdf-engine=xelatex` (or `lualatex`) if you need Unicode or custom font support.
 

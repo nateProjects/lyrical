@@ -66,7 +66,7 @@ echo
 
 if require pandoc; then
 
-  pandoc --lua-filter tests/pandocFilter.lua tyger.poem \
+  pandoc --lua-filter pandocFilter.lua tyger.poem \
       -f markdown -o "$OUT_DIR/tyger_pandoc.html" 2>/dev/null \
     && grep -q "Tyger Tyger" "$OUT_DIR/tyger_pandoc.html" \
     && pass "pandocFilter.lua → HTML" \
@@ -93,7 +93,7 @@ if require pandoc; then
     || fail "pandocFilter.lua – line numbering in output"
 
   # pandoc → PDF (requires a LaTeX engine)
-  if pandoc --lua-filter tests/pandocFilter.lua tyger.poem \
+  if pandoc --lua-filter pandocFilter.lua tyger.poem \
         -f markdown -o "$OUT_DIR/tyger_pandoc.pdf" 2>/dev/null; then
     [ -s "$OUT_DIR/tyger_pandoc.pdf" ] \
       && pass "pandocFilter.lua → PDF" \
