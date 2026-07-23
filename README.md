@@ -2,7 +2,7 @@
 
 Create / format poetry in MarkDown. Output it to HTML / Typst / LaTeX / PDF / ePub
 
-![](tests/tyger.jpg)
+![](tests/tyger.jpg | width=640)
 
 ## Requirements
 
