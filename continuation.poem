@@ -1,0 +1,15 @@
+---
+Title: A Line Too Long For The Page
+Author: Lyrical
+Year: 2026
+PForm: Freeform
+---
+@@poem:start
+Some verse lines run on far past what a narrow chapbook column can hold,
++so the overflow is marked as a continuation, not a new line of its own.
+It keeps the original line's number and its own hanging indent.
+
+A short line needs no marker at all.
+@@poem:end
+
+~>The Editors, 2026

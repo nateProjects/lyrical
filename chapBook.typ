@@ -25,10 +25,27 @@
   return result
 }
 
+// Renders one poem line's text, expanding inline markers:
+//   %%text%%  → small caps
+//   ||        → caesura (a visible mid-line gap)
+#let render-poem-line(line) = {
+  let segments = line.split("||")
+  for (seg-index, segment) in segments.enumerate() {
+    if seg-index > 0 { h(1em) }
+    let sc-parts = segment.split("%%")
+    for (part-index, part) in sc-parts.enumerate() {
+      if calc.rem(part-index, 2) == 1 { smallcaps(part) } else { part }
+    }
+  }
+}
+
 // ── Poem typesetter ────────────────────────────────────────────────────────
 // metre: a string of characters where each unique character maps to an indent
 //   level, cycling per line.  "ab" = alternate (a=flush, b=indented).
 //   "abba" = ABBA rhyme indentation, etc.
+// A line prefixed with "+" is a continuation of the previous line (e.g. a
+// long line wrapped for print): it gets a hanging indent instead of a metre
+// slot, and doesn't advance the metre cycle for the lines that follow it.
 #let poem(
   text,
   metre: "ab",
@@ -67,22 +84,31 @@
     let verse-content = {
       let line-count = 0
       for (i, line) in verse.enumerate() {
-        let metre-char = metre-chars.at(calc.rem(line-count, metre-chars.len()))
-        let indent-amount = indent-map.at(metre-char)
-        if indent-amount > 0pt {
-          if keep-indent-on-wrap {
-            box(width: 100% - indent-amount, pad(left: indent-amount)[
-              #set par(hanging-indent: indent-amount)
-              #line
-            ])
-          } else {
-            h(indent-amount)
-            line
-          }
+        let is-continuation = line.starts-with("+")
+        let rendered = render-poem-line(if is-continuation { line.slice(1) } else { line })
+        if is-continuation {
+          box(width: 100% - indent-size, pad(left: indent-size)[
+            #set par(hanging-indent: indent-size)
+            #rendered
+          ])
         } else {
-          line
+          let metre-char = metre-chars.at(calc.rem(line-count, metre-chars.len()))
+          let indent-amount = indent-map.at(metre-char)
+          if indent-amount > 0pt {
+            if keep-indent-on-wrap {
+              box(width: 100% - indent-amount, pad(left: indent-amount)[
+                #set par(hanging-indent: indent-amount)
+                #rendered
+              ])
+            } else {
+              h(indent-amount)
+              rendered
+            }
+          } else {
+            rendered
+          }
+          line-count += 1
         }
-        line-count += 1
         if i < verse.len() - 1 { linebreak() }
       }
     }

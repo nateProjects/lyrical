@@ -43,6 +43,13 @@ def _strip_directive_comment(text):
     return text[:idx].strip() if idx != -1 else text
 
 
+def apply_inline_markers(text):
+    """Expand inline poetic markers: %%small caps%% and || (caesura)."""
+    text = re.sub(r'%%(.+?)%%', r'<span style="font-variant: small-caps;">\1</span>', text)
+    text = text.replace('||', '<span class="caesura">&nbsp;&nbsp;&nbsp;&nbsp;</span>')
+    return text
+
+
 def format_poem(text, indent_alternate=False, numbering=False):
     result = []
     in_poem = False
@@ -74,24 +81,36 @@ def format_poem(text, indent_alternate=False, numbering=False):
             numbering = False
             continue
 
+        # Attribution / byline — semantic right-aligned element, distinct from "->"
+        if s.startswith('~>'):
+            result.append(f'<div class="attribution" style="text-align: right;">{apply_inline_markers(s[2:])}</div>')
+            continue
+
         # Alignment (works inside and outside poem mode)
         if s.startswith('-><'):
-            result.append(f'<div style="text-align: center;">{s[3:]}</div>')
+            result.append(f'<div style="text-align: center;">{apply_inline_markers(s[3:])}</div>')
             continue
         if s.startswith('->'):
-            result.append(f'<div style="text-align: right;">{s[2:]}</div>')
+            result.append(f'<div style="text-align: right;">{apply_inline_markers(s[2:])}</div>')
+            continue
+
+        # Continuation of a wrapped line — hanging-indented, not a new numbered verse line
+        continuation_match = re.match(r'^\+(.*)', s)
+        if continuation_match:
+            indent = '<span class="continuation">' + '&nbsp;' * 4 + '</span>'
+            result.append(indent + apply_inline_markers(continuation_match.group(1)))
             continue
 
         # Manual indentation via leading colons
         colon_match = re.match(r'^(:+)(.*)', s)
         if colon_match:
             depth = len(colon_match.group(1))
-            result.append('&nbsp;' * (depth * 4) + colon_match.group(2))
+            result.append('&nbsp;' * (depth * 4) + apply_inline_markers(colon_match.group(2)))
             continue
 
         # Poem mode: alternate indentation and optional line numbering
         if in_poem and s:
-            formatted = s
+            formatted = apply_inline_markers(s)
             if numbering and line_count % 2 == 0:
                 formatted = f'({line_count // 2 + 1}) {formatted}'
             if indent_alternate and line_count % 2 == 1:
@@ -99,7 +118,7 @@ def format_poem(text, indent_alternate=False, numbering=False):
             line_count += 1
             result.append(formatted)
         else:
-            result.append(line)
+            result.append(apply_inline_markers(line))
 
     return '\n'.join(result)
 

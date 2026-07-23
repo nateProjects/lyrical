@@ -23,6 +23,15 @@ require() { command -v "$1" &>/dev/null; }
 echo "Output dir: $OUT_DIR"
 echo
 
+# Standalone snippet for the continuation-line marker (tyger.poem has no
+# naturally overlong lines to demonstrate it on).
+cat > "$OUT_DIR/continuation.poem" <<'EOF'
+@@poem:start
+This is a long line that keeps going
++and here is its continuation
+@@poem:end
+EOF
+
 # ── Python / HTML ─────────────────────────────────────────────────────────
 
 if require python3; then
@@ -52,6 +61,32 @@ if require python3; then
     grep -vq "<h[1-6].*<br>" "$OUT_DIR/tyger.html" \
       && pass "poemParser.py – no <br> inside headings" \
       || fail "poemParser.py – no <br> inside headings"
+
+    # Attribution — semantic element, distinct from generic alignment
+    grep -q 'class="attribution"' "$OUT_DIR/tyger.html" \
+      && pass "poemParser.py – attribution in output" \
+      || fail "poemParser.py – attribution in output"
+
+    # Small caps
+    grep -q "font-variant: small-caps" "$OUT_DIR/tyger.html" \
+      && pass "poemParser.py – small caps in output" \
+      || fail "poemParser.py – small caps in output"
+
+    # Caesura
+    grep -q 'class="caesura"' "$OUT_DIR/tyger.html" \
+      && pass "poemParser.py – caesura in output" \
+      || fail "poemParser.py – caesura in output"
+
+    # Markers must not leak into output literally
+    grep -vqE '~>|%%|\|\|' "$OUT_DIR/tyger.html" \
+      && pass "poemParser.py – markers consumed (not in output)" \
+      || fail "poemParser.py – markers leaked into output"
+
+    # Continuation line
+    python3 poemParser.py "$OUT_DIR/continuation.poem" > "$OUT_DIR/continuation.html" 2>/dev/null \
+      && grep -q 'class="continuation"' "$OUT_DIR/continuation.html" \
+      && pass "poemParser.py – continuation line in output" \
+      || fail "poemParser.py – continuation line in output"
 
   else
     skipped "poemParser.py tests" "markdown2 (pip install markdown2)"
@@ -92,6 +127,33 @@ if require pandoc; then
     && pass "pandocFilter.lua – line numbering in output" \
     || fail "pandocFilter.lua – line numbering in output"
 
+  # Attribution — semantic element, distinct from generic alignment
+  grep -q 'class="attribution"' "$OUT_DIR/tyger_pandoc.html" \
+    && pass "pandocFilter.lua – attribution in output" \
+    || fail "pandocFilter.lua – attribution in output"
+
+  # Small caps
+  grep -q "font-variant: small-caps" "$OUT_DIR/tyger_pandoc.html" \
+    && pass "pandocFilter.lua – small caps in output" \
+    || fail "pandocFilter.lua – small caps in output"
+
+  # Caesura
+  grep -q 'class="caesura"' "$OUT_DIR/tyger_pandoc.html" \
+    && pass "pandocFilter.lua – caesura in output" \
+    || fail "pandocFilter.lua – caesura in output"
+
+  # Markers must not leak into output literally
+  grep -vqE '~>|%%|\|\|' "$OUT_DIR/tyger_pandoc.html" \
+    && pass "pandocFilter.lua – markers consumed (not in output)" \
+    || fail "pandocFilter.lua – markers leaked into output"
+
+  # Continuation line
+  pandoc --lua-filter pandocFilter.lua "$OUT_DIR/continuation.poem" \
+      -f markdown -o "$OUT_DIR/continuation_pandoc.html" 2>/dev/null \
+    && grep -q 'class="continuation"' "$OUT_DIR/continuation_pandoc.html" \
+    && pass "pandocFilter.lua – continuation line in output" \
+    || fail "pandocFilter.lua – continuation line in output"
+
   # pandoc → PDF (requires a LaTeX engine)
   if pandoc --lua-filter pandocFilter.lua tyger.poem \
         -f markdown -o "$OUT_DIR/tyger_pandoc.pdf" 2>/dev/null; then
@@ -124,6 +186,28 @@ if require typst && require python3; then
     && [ -s "$OUT_DIR/tyger_typst.pdf" ] \
     && pass "typst compile → PDF" \
     || fail "typst compile → PDF"
+
+  # Attribution is pulled out into its own aligned block, and inline markers
+  # (small caps, caesura) are passed through untouched for poem() to render
+  grep -q "align(right)" "$OUT_DIR/tyger.typ" \
+    && pass "mdToTypst.py – attribution in output" \
+    || fail "mdToTypst.py – attribution in output"
+
+  grep -q "%%Tyger Tyger%%" "$OUT_DIR/tyger.typ" \
+    && grep -q "hand || or eye" "$OUT_DIR/tyger.typ" \
+    && pass "mdToTypst.py – inline markers passed through" \
+    || fail "mdToTypst.py – inline markers passed through"
+
+  # Continuation line — "+" prefix must survive extraction for poem() to interpret
+  python3 mdToTypst.py "$OUT_DIR/continuation.poem" "$OUT_DIR/continuation.typ" 2>/dev/null \
+    && grep -q '+and here is its continuation' "$OUT_DIR/continuation.typ" \
+    && pass "mdToTypst.py – continuation marker passed through" \
+    || fail "mdToTypst.py – continuation marker passed through"
+
+  typst compile "$OUT_DIR/continuation.typ" "$OUT_DIR/continuation_typst.pdf" 2>/dev/null \
+    && [ -s "$OUT_DIR/continuation_typst.pdf" ] \
+    && pass "typst compile → PDF (continuation line)" \
+    || fail "typst compile → PDF (continuation line)"
 
 elif ! require typst; then
   skipped "Typst tests" "typst"

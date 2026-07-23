@@ -62,29 +62,102 @@ Customise the title page by editing `book-title`, `author`, and `year` at the to
 
 ## MarkDown Spec
 
+Worked examples: [tyger.poem](tyger.poem) (most features) and [continuation.poem](continuation.poem) (wrapped lines).
+
+### Front matter
+
+Metadata only — never rendered.
+
 ```
-# front matter - do not display on output
 ---
-Title: The Tyger # space after : ignored 
-Author: William Blake 
-Year: 1794 
+Title: The Tyger # space after : ignored
+Author: William Blake
+Year: 1794
 PForm: Freeform # lower / upper case allowed
 PIndent: Alternate
 PMetre: ABAB # should also allow PMeter
 PNumbering: Alternate
 ---
-# Markdown
+```
 
-# Assignments
-@@indent:metre # or @@indent:meter
+### Directives
+
+```
+@@indent:metre     # or @@indent:meter — alternate-indent every other line
+@@numbering:on     # number every other line, e.g. (1), (2)...
 @@numbering:off
-@@poem # start poetry formatting
+@@poem             # or @@poem:start — begin poetry formatting
+@@poem:end         # end poetry formatting (or end-of-file)
+```
 
-# Alignment
+### Alignment
+
+Generic per-line alignment. Works inside and outside `@@poem`.
+
+```
 ->This sentence is right aligned.
 -><This sentence is center aligned.
+```
 
-# Manual Indenting
+### Manual indenting
+
+Each leading `:` adds one indent level. Excluded from line numbering and
+metre-based alternate indent — it's an explicit indent, not a metre slot.
+
+```
 :Indent once
 ::Indent twice
 ```
+
+### Attribution / byline
+
+A right-aligned line tagged as attribution rather than generic alignment, so
+it can be styled distinctly (e.g. italic, or moved to a title-page credit).
+
+```
+~>William Blake, 1794
+```
+
+### Continuation lines
+
+`+` marks a line as the hanging-indented continuation of the line above it —
+for a verse line too long to typeset on one line. It keeps the original
+line's number and doesn't advance metre-based alternate indent.
+
+```
+This is a long line that keeps going
++and this is its wrapped continuation
+```
+
+### Caesura
+
+`||` inserts a visible mid-line pause — a real rendered gap, not just a space.
+
+```
+What dread hand? || what dread feet?
+```
+
+### Small caps
+
+Common for a poem's opening line or title.
+
+```
+%%Tyger Tyger%%, burning bright
+```
+
+### Backend support
+
+Alignment, manual indent, and line numbering are HTML-only for now — the
+Typst pipeline ([mdToTypst.py](mdToTypst.py)) strips those prefixes and
+renders plain text instead, since `chapBook.typ` doesn't yet model per-line
+alignment or a running counter.
+
+| Feature | `poemParser.py` / `pandocFilter.lua` (HTML) | `mdToTypst.py` (Typst/PDF) |
+|---|---|---|
+| Alignment (`->`, `-><`) | ✓ | prefix stripped, alignment lost |
+| Manual indent (`:`) | ✓ | prefix stripped, indent lost |
+| Line numbering (`@@numbering`) | ✓ | not implemented |
+| Continuation (`+`) | ✓ hanging indent | ✓ hanging indent |
+| Attribution (`~>`) | ✓ `class="attribution"` | ✓ separate right-aligned italic block after the poem |
+| Caesura (`\|\|`) | ✓ `class="caesura"` span | ✓ real `h(1em)` spacing |
+| Small caps (`%%...%%`) | ✓ `font-variant: small-caps` | ✓ `smallcaps()` |

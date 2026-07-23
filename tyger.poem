@@ -11,9 +11,9 @@ PNumbering: Alternate
 @@numbering:on
 
 @@poem:start
--><#Tyger Tyger, burning bright, 
-In the forests of the night; 
-What immortal hand or eye, 
+-><#%%Tyger Tyger%%, burning bright,
+In the forests of the night;
+What immortal hand || or eye,
 Could frame thy fearful symmetry?
 
 In what distant deeps or skies. 
@@ -41,4 +41,4 @@ In the forests of the night:
 What immortal hand or eye,
 Dare frame thy fearful symmetry?
 
-->William Blake, 1794
+~>William Blake, 1794
