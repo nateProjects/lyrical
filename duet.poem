@@ -1,0 +1,37 @@
+---
+Title: Duet for Two Voices
+Subtitle: A Small Dialogue
+Author: Lyrical
+Year: 2026
+Dedication: For anyone who has ever argued with the wind
+Epigraph: We are the hollow refrain the seasons keep singing.
+EpigraphAttribution: after no one in particular
+PKeep: Together
+---
+@@poem:start
+@@section:Call
+
+@WIND: Where do you go when the branches let you fall?
+@LEAF: {{fr:Je ne sais pas.}} I only know the ground is close.
+
+~The seasons keep their old refrain.
+
+@WIND: I carried you from April to the frost.
+Not ~~summer~~ but autumn asked, and I said yes.
+
+~The seasons keep their old refrain.
+
+@@section:Answer
+
+@LEAF: A [[secret best]] left where it fell,
+@WIND: is still a secret, whispered well.
+
+~The seasons keep their old refrain.
+
+@@pagebreak
+
+@LEAF: So let me go. The ground is warm enough.
+@WIND: Then go — and %%I will follow%%, come the spring.
+@@poem:end
+
+~>Lyrical, Demo Edition, 2026

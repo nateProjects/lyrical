@@ -40,14 +40,17 @@ def extract_poem_lines(body):
     Rules:
     - Collection starts at the first @@poem / @@poem:start directive.
     - Collection stops at @@poem:end (or EOF).
-    - All other @@ directives are consumed silently.
+    - @@section, @@section:Title, and @@pagebreak are kept as raw markers —
+      all other @@ directives are consumed silently.
     - Markdown section headings (# Heading) outside/inside poem block are dropped.
     - Attribution lines (~>) are pulled out separately and rendered after the poem.
     - Alignment prefixes (-> and -><) are stripped; content is kept.
     - Colon-indentation prefixes (:, ::, …) are stripped; content is kept.
     - Markdown heading markers at the start of a line (#word) are stripped.
-    - Continuation markers (+) and inline markers (%%small caps%%, ||) are left
-      as-is; chapBook.typ's poem() interprets them when typesetting.
+    - Continuation markers (+), speaker markers (@Name:), refrain markers (~),
+      and inline markers (%%small caps%%, ~~strikethrough~~, [[erasure]],
+      {{lang:foreign text}}, ||) are left as-is; chapBook.typ's poem()
+      interprets them when typesetting.
     - Blank lines are preserved as stanza breaks.
     """
     lines = body.split('\n')
@@ -70,6 +73,14 @@ def extract_poem_lines(body):
             continue
         if s == '@@poem:end':
             in_poem = False
+            continue
+
+        # Section/part breaks and page-break hints are kept as raw markers —
+        # poem() in chapBook.typ recognises and interprets them at render time.
+        # (Must be checked before the generic "@@" skip below, which would
+        # otherwise consume them silently like any other directive.)
+        if in_poem and (s == '@@section' or s.startswith('@@section:') or s == '@@pagebreak'):
+            poem_lines.append(s)
             continue
 
         # Skip all other directives regardless of mode
@@ -139,11 +150,26 @@ def generate_typst(metadata, poem_lines, attributions=None, template: str = 'cha
     author = metadata.get('Author', 'Unknown')
     year   = metadata.get('Year',   '')
     metre  = metre_from_metadata(metadata)
+    subtitle    = metadata.get('Subtitle', '')
+    dedication  = metadata.get('Dedication', '')
+    epigraph    = metadata.get('Epigraph', '')
+    epigraph_by = metadata.get('EpigraphAttribution', '')
+    keep_together = metadata.get('PKeep', '').lower() != 'auto'
 
     escaped = [escape_typst(ln) for ln in poem_lines]
     poem_body = '\n'.join(escaped)
 
     year_arg = f',\n  year: "{year}"' if year else ''
+
+    front_block = ''
+    if subtitle:
+        front_block += f'#align(center)[#emph[{escape_typst(subtitle)}]]\n\n'
+    if dedication:
+        front_block += f'#align(center)[#emph[{escape_typst(dedication)}]]\n\n'
+    if epigraph:
+        front_block += f'#align(center)[#emph["{escape_typst(epigraph)}"]]\n\n'
+        if epigraph_by:
+            front_block += f'#align(right)[#emph[— {escape_typst(epigraph_by)}]]\n\n'
 
     attribution_block = ''
     if attributions:
@@ -163,9 +189,11 @@ def generate_typst(metadata, poem_lines, attributions=None, template: str = 'cha
         f'\n'
         f'== {title}\n'
         f'\n'
+        f'{front_block}'
+        f'\n'
         f'#poem("\n'
         f'{poem_body}\n'
-        f'", metre: "{metre}")\n'
+        f'", metre: "{metre}", keep-verses-together: {"true" if keep_together else "false"})\n'
         f'{attribution_block}'
     )
 

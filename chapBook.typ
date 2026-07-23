@@ -26,17 +26,73 @@
 }
 
 // Renders one poem line's text, expanding inline markers:
-//   %%text%%  → small caps
-//   ||        → caesura (a visible mid-line gap)
+//   %%text%%       → small caps
+//   ~~text~~       → strikethrough
+//   [[text]]       → visible erasure (a redacted block, for erasure poetry)
+//   {{lang:text}}  → foreign-language emphasis, tagged with its language
+//   {{text}}       → foreign-language emphasis, no language tag
+//   ||             → caesura (a visible mid-line gap)
+// Scans by grapheme cluster rather than byte, so multi-byte characters (e.g.
+// the curly quotes from process-quotes) are never split mid-character.
 #let render-poem-line(line) = {
-  let segments = line.split("||")
-  for (seg-index, segment) in segments.enumerate() {
-    if seg-index > 0 { h(1em) }
-    let sc-parts = segment.split("%%")
-    for (part-index, part) in sc-parts.enumerate() {
-      if calc.rem(part-index, 2) == 1 { smallcaps(part) } else { part }
+  let cl = line.clusters()
+  let n = cl.len()
+  let starts-with-at = (pos, token) => {
+    let tok = token.clusters()
+    pos + tok.len() <= n and cl.slice(pos, pos + tok.len()).join("") == token
+  }
+  let find-close = (pos, token) => {
+    let tok-len = token.clusters().len()
+    let j = pos
+    while j + tok-len <= n {
+      if starts-with-at(j, token) { return j }
+      j += 1
+    }
+    none
+  }
+  let out = []
+  let i = 0
+  while i < n {
+    if starts-with-at(i, "||") {
+      out += h(1em)
+      i += 2
+    } else if starts-with-at(i, "%%") {
+      let close = find-close(i + 2, "%%")
+      if close != none {
+        out += smallcaps(cl.slice(i + 2, close).join(""))
+        i = close + 2
+      } else { out += cl.at(i); i += 1 }
+    } else if starts-with-at(i, "~~") {
+      let close = find-close(i + 2, "~~")
+      if close != none {
+        out += strike(cl.slice(i + 2, close).join(""))
+        i = close + 2
+      } else { out += cl.at(i); i += 1 }
+    } else if starts-with-at(i, "[[") {
+      let close = find-close(i + 2, "]]")
+      if close != none {
+        let redacted = cl.slice(i + 2, close).join("")
+        out += box(fill: black, text(fill: black)[#redacted])
+        i = close + 2
+      } else { out += cl.at(i); i += 1 }
+    } else if starts-with-at(i, "{{") {
+      let close = find-close(i + 2, "}}")
+      if close != none {
+        let inner = cl.slice(i + 2, close).join("")
+        let colon = inner.position(":")
+        if colon != none and colon <= 3 {
+          out += emph(inner.slice(colon + 1))
+        } else {
+          out += emph(inner)
+        }
+        i = close + 2
+      } else { out += cl.at(i); i += 1 }
+    } else {
+      out += cl.at(i)
+      i += 1
     }
   }
+  out
 }
 
 // ── Poem typesetter ────────────────────────────────────────────────────────
@@ -46,6 +102,11 @@
 // A line prefixed with "+" is a continuation of the previous line (e.g. a
 // long line wrapped for print): it gets a hanging indent instead of a metre
 // slot, and doesn't advance the metre cycle for the lines that follow it.
+// A line prefixed with "~" (not "~~", which is strikethrough) is a refrain,
+// underlined so it stands out wherever it recurs. A line of the form
+// "@Name: text" gets Name rendered as a small-caps speaker label.
+// "@@section" (bare, or "@@section:Title") inserts a numbered part break;
+// "@@pagebreak" forces a page break — both are lines on their own.
 #let poem(
   text,
   metre: "ab",
@@ -63,13 +124,27 @@
   for (i, char) in unique-chars.enumerate() {
     indent-map.insert(char, i * indent-size)
   }
+
   let verses = ()
   let current-verse = ()
   for line in all-lines {
     let trimmed = line.trim()
-    if trimmed == "" {
+    if trimmed == "@@section" or trimmed.starts-with("@@section:") {
       if current-verse.len() > 0 {
-        verses.push(current-verse)
+        verses.push((kind: "verse", lines: current-verse))
+        current-verse = ()
+      }
+      let title = if trimmed == "@@section" { none } else { trimmed.slice(10).trim() }
+      verses.push((kind: "section", title: title))
+    } else if trimmed == "@@pagebreak" {
+      if current-verse.len() > 0 {
+        verses.push((kind: "verse", lines: current-verse))
+        current-verse = ()
+      }
+      verses.push((kind: "pagebreak"))
+    } else if trimmed == "" {
+      if current-verse.len() > 0 {
+        verses.push((kind: "verse", lines: current-verse))
         current-verse = ()
       }
     } else {
@@ -77,15 +152,49 @@
     }
   }
   if current-verse.len() > 0 {
-    verses.push(current-verse)
+    verses.push((kind: "verse", lines: current-verse))
   }
-  for (verse-index, verse) in verses.enumerate() {
+
+  let section-count = 0
+  for (verse-index, entry) in verses.enumerate() {
+    if entry.kind == "pagebreak" {
+      pagebreak()
+    } else if entry.kind == "section" {
+      if verse-index > 0 { v(verse-spacing) }
+      if entry.title == none {
+        scene-break()
+      } else {
+        section-count += 1
+        align(center)[
+          #strong(numbering("I", section-count)) #h(0.5em) #smallcaps(entry.title)
+        ]
+      }
+    } else {
     if verse-index > 0 { v(verse-spacing) }
+    let verse = entry.lines
     let verse-content = {
       let line-count = 0
       for (i, line) in verse.enumerate() {
         let is-continuation = line.starts-with("+")
-        let rendered = render-poem-line(if is-continuation { line.slice(1) } else { line })
+        let content-line = if is-continuation { line.slice(1) } else { line }
+        let is-speaker = content-line.starts-with("@") and not content-line.starts-with("@@")
+        let is-refrain = content-line.starts-with("~") and not content-line.starts-with("~~")
+
+        let rendered = if is-speaker {
+          let colon = content-line.position(":")
+          if colon != none {
+            let name = content-line.slice(1, colon)
+            let rest = content-line.slice(colon + 1).trim()
+            strong(smallcaps(name)) + [ ] + render-poem-line(rest)
+          } else {
+            render-poem-line(content-line)
+          }
+        } else if is-refrain {
+          underline(render-poem-line(content-line.slice(1)))
+        } else {
+          render-poem-line(content-line)
+        }
+
         if is-continuation {
           box(width: 100% - indent-size, pad(left: indent-size)[
             #set par(hanging-indent: indent-size)
@@ -116,6 +225,7 @@
       block(breakable: false)[#verse-content]
     } else {
       verse-content
+    }
     }
   }
 }

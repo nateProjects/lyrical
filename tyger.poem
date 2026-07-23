@@ -1,11 +1,13 @@
 ---
-Title: The Tyger 
-Author: William Blake 
-Year: 1794 
+Title: The Tyger
+Author: William Blake
+Year: 1794
 PForm: Verse
 PIndent: Alternate
 PMetre: AABB # should also allow PMeter
 PNumbering: Alternate
+Epigraph: Little Lamb, who made thee?
+EpigraphAttribution: from The Lamb, Songs of Innocence
 ---
 @@indent:metre
 @@numbering:on

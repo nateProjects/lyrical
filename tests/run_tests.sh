@@ -32,6 +32,18 @@ This is a long line that keeps going
 @@poem:end
 EOF
 
+# Standalone snippet for per-stanza numbering reset.
+cat > "$OUT_DIR/stanza-numbering.poem" <<'EOF'
+@@poem:start
+@@numbering:stanza
+First line of stanza one
+Second line of stanza one
+
+First line of stanza two
+Second line of stanza two
+@@poem:end
+EOF
+
 # ── Python / HTML ─────────────────────────────────────────────────────────
 
 if require python3; then
@@ -87,6 +99,63 @@ if require python3; then
       && grep -q 'class="continuation"' "$OUT_DIR/continuation.html" \
       && pass "poemParser.py – continuation line in output" \
       || fail "poemParser.py – continuation line in output"
+
+    # Per-stanza numbering reset — stanza one and stanza two both start at (1)
+    python3 poemParser.py "$OUT_DIR/stanza-numbering.poem" > "$OUT_DIR/stanza-numbering.html" 2>/dev/null \
+      && [ "$(grep -o '(1)' "$OUT_DIR/stanza-numbering.html" | wc -l)" -ge 2 ] \
+      && pass "poemParser.py – per-stanza numbering reset in output" \
+      || fail "poemParser.py – per-stanza numbering reset in output"
+
+    # Stage 2 features via duet.poem — title/subtitle/dedication/epigraph,
+    # section headings, speakers, refrains, strikethrough, erasure, foreign
+    # language, page breaks, and the keep-together print hint.
+    python3 poemParser.py duet.poem > "$OUT_DIR/duet.html" 2>/dev/null \
+      && pass "poemParser.py – duet.poem → HTML" \
+      || fail "poemParser.py – duet.poem → HTML"
+
+    grep -q 'class="poem-title"' "$OUT_DIR/duet.html" \
+      && grep -q 'class="poem-subtitle"' "$OUT_DIR/duet.html" \
+      && grep -q 'class="dedication"' "$OUT_DIR/duet.html" \
+      && grep -q 'class="epigraph"' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – title/subtitle/dedication/epigraph in output" \
+      || fail "poemParser.py – title/subtitle/dedication/epigraph in output"
+
+    grep -q 'class="part-heading"' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – section heading in output" \
+      || fail "poemParser.py – section heading in output"
+
+    grep -q 'class="speaker-name"' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – speaker attribution in output" \
+      || fail "poemParser.py – speaker attribution in output"
+
+    grep -q 'class="refrain"' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – refrain in output" \
+      || fail "poemParser.py – refrain in output"
+
+    grep -q '<del>summer</del>' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – strikethrough in output" \
+      || fail "poemParser.py – strikethrough in output"
+
+    grep -q 'class="erasure"' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – erasure in output" \
+      || fail "poemParser.py – erasure in output"
+
+    grep -q '<em lang="fr"' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – foreign-language marker in output" \
+      || fail "poemParser.py – foreign-language marker in output"
+
+    grep -q 'page-break-after' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – page-break hint in output" \
+      || fail "poemParser.py – page-break hint in output"
+
+    grep -q 'break-inside: avoid' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – keep-together CSS in output (PKeep: Together)" \
+      || fail "poemParser.py – keep-together CSS in output (PKeep: Together)"
+
+    # Directives/markers must not leak into output literally
+    grep -vqE '@@section|@@pagebreak|@WIND:|@LEAF:|~~|\[\[|\]\]|\{\{|\}\}' "$OUT_DIR/duet.html" \
+      && pass "poemParser.py – stage 2 directives/markers consumed (not in output)" \
+      || fail "poemParser.py – stage 2 directives/markers leaked into output"
 
   else
     skipped "poemParser.py tests" "markdown2 (pip install markdown2)"
@@ -154,6 +223,69 @@ if require pandoc; then
     && pass "pandocFilter.lua – continuation line in output" \
     || fail "pandocFilter.lua – continuation line in output"
 
+  # Line breaks actually present between poem lines (regression check for a
+  # pre-existing bug where sibling Plain blocks had no markup between them
+  # and would collapse onto one line in a real browser)
+  grep -q "<br" "$OUT_DIR/tyger_pandoc.html" \
+    && pass "pandocFilter.lua – line breaks present between poem lines" \
+    || fail "pandocFilter.lua – line breaks present between poem lines"
+
+  # Per-stanza numbering reset — stanza one and stanza two both start at (1)
+  pandoc --lua-filter pandocFilter.lua "$OUT_DIR/stanza-numbering.poem" \
+      -f markdown -o "$OUT_DIR/stanza-numbering_pandoc.html" 2>/dev/null \
+    && [ "$(grep -o '(1)' "$OUT_DIR/stanza-numbering_pandoc.html" | wc -l)" -ge 2 ] \
+    && pass "pandocFilter.lua – per-stanza numbering reset in output" \
+    || fail "pandocFilter.lua – per-stanza numbering reset in output"
+
+  # Stage 2 features via duet.poem
+  pandoc --lua-filter pandocFilter.lua duet.poem \
+      -f markdown -o "$OUT_DIR/duet_pandoc.html" 2>/dev/null \
+    && pass "pandocFilter.lua – duet.poem → HTML" \
+    || fail "pandocFilter.lua – duet.poem → HTML"
+
+  grep -q 'class="poem-title"' "$OUT_DIR/duet_pandoc.html" \
+    && grep -q 'class="poem-subtitle"' "$OUT_DIR/duet_pandoc.html" \
+    && grep -q 'class="dedication"' "$OUT_DIR/duet_pandoc.html" \
+    && grep -q 'class="epigraph"' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – title/subtitle/dedication/epigraph in output" \
+    || fail "pandocFilter.lua – title/subtitle/dedication/epigraph in output"
+
+  grep -q 'class="part-heading"' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – section heading in output" \
+    || fail "pandocFilter.lua – section heading in output"
+
+  grep -q 'class="speaker-name"' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – speaker attribution in output" \
+    || fail "pandocFilter.lua – speaker attribution in output"
+
+  grep -q 'class="refrain"' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – refrain in output" \
+    || fail "pandocFilter.lua – refrain in output"
+
+  grep -q '<del>summer</del>' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – strikethrough in output" \
+    || fail "pandocFilter.lua – strikethrough in output"
+
+  grep -q 'class="erasure"' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – erasure in output" \
+    || fail "pandocFilter.lua – erasure in output"
+
+  grep -q '<em lang="fr"' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – foreign-language marker in output" \
+    || fail "pandocFilter.lua – foreign-language marker in output"
+
+  grep -q 'page-break-after' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – page-break hint in output" \
+    || fail "pandocFilter.lua – page-break hint in output"
+
+  grep -q 'break-inside: avoid' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – keep-together CSS in output (PKeep: Together)" \
+    || fail "pandocFilter.lua – keep-together CSS in output (PKeep: Together)"
+
+  grep -vqE '@@section|@@pagebreak|@WIND:|@LEAF:|~~|\[\[|\]\]|\{\{|\}\}' "$OUT_DIR/duet_pandoc.html" \
+    && pass "pandocFilter.lua – stage 2 directives/markers consumed (not in output)" \
+    || fail "pandocFilter.lua – stage 2 directives/markers leaked into output"
+
   # pandoc → PDF (requires a LaTeX engine)
   if pandoc --lua-filter pandocFilter.lua tyger.poem \
         -f markdown -o "$OUT_DIR/tyger_pandoc.pdf" 2>/dev/null; then
@@ -208,6 +340,30 @@ if require typst && require python3; then
     && [ -s "$OUT_DIR/continuation_typst.pdf" ] \
     && pass "typst compile → PDF (continuation line)" \
     || fail "typst compile → PDF (continuation line)"
+
+  # Stage 2 features via duet.poem — extraction preserves the raw markers,
+  # and poem()/render-poem-line in chapBook.typ must compile them without error.
+  python3 mdToTypst.py duet.poem "$OUT_DIR/duet.typ" 2>/dev/null \
+    && grep -q 'align(center)\[#emph\[A Small Dialogue\]\]' "$OUT_DIR/duet.typ" \
+    && grep -q 'align(center)\[#emph\[For anyone who has ever argued with the wind\]\]' "$OUT_DIR/duet.typ" \
+    && pass "mdToTypst.py – subtitle/dedication/epigraph in output" \
+    || fail "mdToTypst.py – subtitle/dedication/epigraph in output"
+
+  grep -q '@@section:Call' "$OUT_DIR/duet.typ" \
+    && grep -q '@@pagebreak' "$OUT_DIR/duet.typ" \
+    && pass "mdToTypst.py – section/pagebreak markers passed through" \
+    || fail "mdToTypst.py – section/pagebreak markers passed through"
+
+  grep -q '@WIND:' "$OUT_DIR/duet.typ" \
+    && grep -q '{{fr:' "$OUT_DIR/duet.typ" \
+    && grep -q '~The seasons' "$OUT_DIR/duet.typ" \
+    && pass "mdToTypst.py – speaker/refrain/foreign-language markers passed through" \
+    || fail "mdToTypst.py – speaker/refrain/foreign-language markers passed through"
+
+  typst compile "$OUT_DIR/duet.typ" "$OUT_DIR/duet_typst.pdf" 2>/dev/null \
+    && [ -s "$OUT_DIR/duet_typst.pdf" ] \
+    && pass "typst compile → PDF (duet.poem, all Stage 2 markers)" \
+    || fail "typst compile → PDF (duet.poem, all Stage 2 markers)"
 
 elif ! require typst; then
   skipped "Typst tests" "typst"
